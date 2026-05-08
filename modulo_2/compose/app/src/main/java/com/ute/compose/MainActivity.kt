@@ -27,7 +27,8 @@ class MainActivity : ComponentActivity() {
                 // Componentes Material 3: TextField, Card, LazyColumn, Scaffold y diálogos
                 // ◀ CAMBIA AQUÍ para probar cada paso:
                 // Paso01TextFieldScreen()
-                 Paso02CardScreen()
+                 Paso01SumaScreen()
+                // Paso02CardScreen()
                 // Paso03_LazyColumnScreen()
                 // Paso04_ScaffoldScreen()
                 // Paso05_NavBarScreen()
