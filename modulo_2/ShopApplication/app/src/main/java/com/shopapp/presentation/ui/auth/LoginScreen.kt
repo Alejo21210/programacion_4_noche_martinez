@@ -70,7 +70,7 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(40.dp))
 
-            // Card del formulario
+            // Formulario
             Surface(
                 shape            = MaterialTheme.shapes.large,
                 color            = Surface,

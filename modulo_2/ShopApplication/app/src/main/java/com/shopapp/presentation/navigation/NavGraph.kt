@@ -27,7 +27,7 @@ import com.shopapp.presentation.ui.uipublic.product.ProductDetailScreen
 import com.shopapp.presentation.ui.client.orders.OrdersScreen
 import com.shopapp.presentation.ui.client.orders.OrderDetailScreen
 import com.shopapp.presentation.ui.client.profile.ProfileScreen
-import com.shopapp.presentation.ui.public.cart.CartBottomSheet
+import com.shopapp.presentation.ui.uipublic.cart.CartBottomSheet
 import com.shopapp.presentation.viewmodel.AuthViewModel
 import com.shopapp.presentation.viewmodel.CartViewModel
 import com.shopapp.theme.Surface
