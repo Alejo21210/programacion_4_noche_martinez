@@ -1,0 +1,15 @@
+toml
+[versions]
+# Define your version numbers here
+compose-bom = "2024.09.00"
+
+[libraries]
+# list ALL your libraries here under ONE header
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.8.0" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+# ... add the rest here
+
+[plugins]
+# Define your plugins here
