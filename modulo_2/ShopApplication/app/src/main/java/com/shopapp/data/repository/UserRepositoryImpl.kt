@@ -1,237 +1,98 @@
-// presentation/ui/admin/AdminScaffold.kt
-package com.shopapp.presentation.ui.admin
+// data/repository/UserRepositoryImpl.kt
+package com.shopapp.data.repository
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.shopapp.domain.model.LoggedUser
-import com.shopapp.theme.*
-import kotlinx.coroutines.launch
+import android.content.Context
+import android.net.Uri
+import com.shopapp.data.remote.api.UserApi
+import com.shopapp.data.remote.dto.toDomain
+import com.shopapp.data.remote.dto.toRequest
+import com.shopapp.domain.model.User
+import com.shopapp.domain.model.UserPayload
+import com.shopapp.domain.repository.UserRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
-data class AdminNavItem(
-    val label:  String,
-    val icon:   ImageVector,
-    val route:  String,
-)
+@Singleton
+class UserRepositoryImpl @Inject constructor(
+    private val api: UserApi,
+    @ApplicationContext private val context: Context,
+) : UserRepository {
 
-val ADMIN_NAV_ITEMS = listOf(
-    AdminNavItem("Dashboard",  Icons.Default.Dashboard,     "admin"),
-    AdminNavItem("Categorías", Icons.Default.Category,      "admin/categories"),
-    AdminNavItem("Productos",  Icons.Default.Inventory,     "admin/products"),
-    AdminNavItem("Pedidos",    Icons.Default.ShoppingBag,   "admin/orders"),
-    AdminNavItem("Usuarios",   Icons.Default.People,        "admin/users"),
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AdminScaffold(
-    currentRoute:  String,
-    user:          LoggedUser?,
-    onNavClick:    (String) -> Unit,
-    onStoreClick:  () -> Unit,
-    onLogout:      () -> Unit,
-    title:         String,
-    content:       @Composable (PaddingValues) -> Unit,
-) {
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope       = rememberCoroutineScope()
-
-    ModalNavigationDrawer(
-        drawerState    = drawerState,
-        drawerContent  = {
-            AdminDrawerContent(
-                currentRoute  = currentRoute,
-                user          = user,
-                onNavClick    = { route ->
-                    scope.launch { drawerState.close() }
-                    onNavClick(route)
-                },
-                onStoreClick  = {
-                    scope.launch { drawerState.close() }
-                    onStoreClick()
-                },
-                onLogout      = {
-                    scope.launch { drawerState.close() }
-                    onLogout()
-                },
-            )
-        },
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title   = {
-                        Text(
-                            text       = title,
-                            style      = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color      = TextPrimary,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Menú", tint = TextPrimary)
-                        }
-                    },
-                    actions = {
-                        TextButton(onClick = onStoreClick) {
-                            Text(
-                                "← Tienda",
-                                color = Accent,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
-                )
-            },
-            containerColor = Background,
-            content        = content,
-        )
+    override suspend fun getUsers(
+        search:   String?,
+        isStaff:  Boolean?,
+        isActive: Boolean?,
+        page:     Int?,
+    ): Result<Pair<List<User>, Int>> = runCatching {
+        val response = api.getUsers(search, isStaff, isActive, page)
+        if (response.isSuccessful) {
+            val body = response.body()!!
+            body.results.map { it.toDomain() } to body.count
+        } else {
+            error("Error ${response.code()}: ${response.errorBody()?.string()}")
+        }
     }
-}
 
-@Composable
-private fun AdminDrawerContent(
-    currentRoute: String,
-    user:         LoggedUser?,
-    onNavClick:   (String) -> Unit,
-    onStoreClick: () -> Unit,
-    onLogout:     () -> Unit,
-) {
-    ModalDrawerSheet(
-        drawerContainerColor = Surface,
-        modifier             = Modifier.width(280.dp),
-    ) {
-        // Header con logo
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Surface2)
-                .padding(24.dp),
-        ) {
-            Text(
-                text       = "ShopApp",
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color      = Accent,
-            )
-            Text(
-                text  = "Panel de administración",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
+    override suspend fun getUser(id: Int): Result<User> = runCatching {
+        val response = api.getUser(id)
+        if (response.isSuccessful) response.body()!!.toDomain()
+        else error("Error ${response.code()}")
+    }
+
+    override suspend fun createUser(payload: UserPayload): Result<User> = runCatching {
+        val response = api.createUser(payload.toRequest())
+        if (response.isSuccessful) response.body()!!.toDomain()
+        else error("Error ${response.code()}: ${response.errorBody()?.string()}")
+    }
+
+    override suspend fun updateUser(id: Int, payload: UserPayload): Result<User> = runCatching {
+        val response = api.updateUser(id, payload.toRequest())
+        if (response.isSuccessful) response.body()!!.toDomain()
+        else error("Error ${response.code()}: ${response.errorBody()?.string()}")
+    }
+
+    override suspend fun deleteUser(id: Int): Result<Unit> = runCatching {
+        val response = api.deleteUser(id)
+        if (!response.isSuccessful) {
+            error("Error ${response.code()}: ${response.errorBody()?.string()}")
         }
+    }
 
-        HorizontalDivider(color = Border, thickness = 0.5.dp)
+    override suspend fun toggleActive(id: Int): Result<Boolean> = runCatching {
+        val response = api.toggleActive(id)
+        if (response.isSuccessful) response.body()!!.isActive
+        else error("Error ${response.code()}: ${response.errorBody()?.string()}")
+    }
 
-        // Avatar del admin
-        if (user != null) {
-            Row(
-                modifier          = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier         = Modifier
-                        .size(40.dp)
-                        .background(
-                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                listOf(Accent, AccentLight)
-                            ),
-                            shape = CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text       = user.username.firstOrNull()?.uppercaseChar()?.toString() ?: "A",
-                        color      = AccentOnDark,
-                        fontWeight = FontWeight.Bold,
-                        fontSize   = 16.sp,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text       = user.username,
-                        style      = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color      = TextPrimary,
-                    )
-                    Surface(
-                        color  = Accent.copy(alpha = 0.15f),
-                        shape  = MaterialTheme.shapes.extraSmall,
-                    ) {
-                        Text(
-                            text       = "Staff",
-                            color      = Accent,
-                            fontSize   = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier   = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        HorizontalDivider(color = Border, thickness = 0.5.dp)
-        Spacer(Modifier.height(8.dp))
-
-        // Items de navegación
-        ADMIN_NAV_ITEMS.forEach { item ->
-            val isSelected = currentRoute == item.route || currentRoute.startsWith("${item.route}/")
-            NavigationDrawerItem(
-                icon     = {
-                    Icon(
-                        item.icon,
-                        contentDescription = item.label,
-                        tint = if (isSelected) Accent else TextSecondary,
-                    )
-                },
-                label    = {
-                    Text(
-                        text       = item.label,
-                        color      = if (isSelected) Accent else TextSecondary,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    )
-                },
-                selected = isSelected,
-                onClick  = { onNavClick(item.route) },
-                colors   = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor   = Accent.copy(alpha = 0.12f),
-                    unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                ),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+    override suspend fun getStats(): Result<Map<String, Int>> = runCatching {
+        val response = api.getStats()
+        if (response.isSuccessful) {
+            val s = response.body()!!
+            mapOf(
+                "total"    to s.total,
+                "active"   to s.active,
+                "inactive" to s.inactive,
+                "staff"    to s.staff,
             )
+        } else {
+            error("Error ${response.code()}: ${response.errorBody()?.string()}")
         }
+    }
 
-        Spacer(Modifier.weight(1f))
-        HorizontalDivider(color = Border, thickness = 0.5.dp)
+    override suspend fun getProfile(): Result<User> = runCatching {
+        val response = api.getProfile()
+        if (response.isSuccessful) response.body()!!.toDomain()
+        else error(response.errorBody()?.string() ?: "Error ${response.code()}")
+    }
 
-        // Cerrar sesión
-        NavigationDrawerItem(
-            icon     = { Icon(Icons.Default.Logout, contentDescription = "Salir", tint = Error) },
-            label    = {
-                Text("Cerrar sesión", color = Error, fontWeight = FontWeight.SemiBold)
-            },
-            selected = false,
-            onClick  = onLogout,
-            colors   = NavigationDrawerItemDefaults.colors(
-                unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-            ),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        )
+    override suspend fun uploadAvatar(uri: Uri): Result<String> = runCatching {
+        val part     = uri.toMultipart(context, fieldName = "avatar")
+        val response = api.uploadAvatar(part)
+        if (response.isSuccessful) {
+            response.body()?.avatarUrl ?: error("El servidor no devolvió una URL de avatar")
+        } else {
+            error(response.errorBody()?.string() ?: "Error ${response.code()}")
+        }
     }
 }
