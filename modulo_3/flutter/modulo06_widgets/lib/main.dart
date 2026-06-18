@@ -1,5 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:modulo06_widgets/widgets/catalogo_basicos.dart';
+import 'package:modulo06_widgets/widgets/servicio_estado.dart';
+import 'package:modulo06_widgets/widgets/reloj.dart';
 
 // ┌──────────────────────────────────────────────────────────────────┐
 // │  Cambia este número y guarda (Ctrl+S) para navegar entre pasos. │
@@ -12,12 +15,37 @@ import 'package:flutter/material.dart';
 // │  7  Paso 5   BuildContext                                        │
 // │  8  Paso 6   Composición de widgets                             │
 // └──────────────────────────────────────────────────────────────────┘
-const int paso = 1;
+const int paso = 3;
 
 void main() => runApp(MaterialApp(
   debugShowCheckedModeBanner: false,
   home: switch (paso) {
     1 => const Scaffold(body: Center(child: Saludo())),
+     2 => const CatalogoBasicos(),
+     3 => const Scaffold(
+      body: Center(
+        child: Wrap(
+          spacing:    12,
+          runSpacing: 8,
+          children: [
+            Etiqueta(texto: 'Activo',    color: Colors.green),
+            Etiqueta(texto: 'Error',     color: Colors.red,    relleno: true),
+            Etiqueta(texto: 'En espera', color: Colors.orange),
+            Etiqueta(texto: 'Crítico',   color: Colors.red,    fontSize: 16, relleno: true),
+            Etiqueta(texto: 'Info',      color: Colors.blue,   fontSize: 11),
+          ],
+        ),
+      ),
+    ),
+    4 => const Scaffold(
+      body: Center(
+        child: ServicioEstado(nombre: 'nginx-proxy'),
+      ),
+    ),
+    6 => Scaffold(
+      appBar: AppBar(title: const Text('Cronómetro')),
+      body: const Center(child: Reloj()),
+    ),
     _ => Scaffold(body: Center(child: Text('Paso $paso: crea el widget primero'))),
   },
 ));
@@ -27,4 +55,39 @@ class Saludo extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       const Text('Hola Flutter', style: TextStyle(fontSize: 32));
+}
+
+class Etiqueta extends StatelessWidget {
+  final String texto;
+  final Color color;
+  final bool relleno;
+  final double fontSize;
+
+  const Etiqueta({
+    super.key,
+    required this.texto,
+    required this.color,
+    this.relleno = false,
+    this.fontSize = 14,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: relleno ? color.withValues(alpha: 0.15) : Colors.transparent,
+        border: Border.all(color: color),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        texto,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
 }
