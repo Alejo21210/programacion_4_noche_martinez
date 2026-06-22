@@ -9,9 +9,10 @@ class Reloj extends StatefulWidget {
 }
 
 class _RelojState extends State<Reloj> {
-  late Timer _timer;
+  Timer? _timer;
   int  _segundos = 0;
   bool _pausado  = false;
+  final List<int> _tiemposVuelta = [];
 
   @override
   void initState() {
@@ -30,16 +31,32 @@ class _RelojState extends State<Reloj> {
     setState(() {
       _pausado = !_pausado;
       if (_pausado) {
-        _timer.cancel();
+        _timer?.cancel();
       } else {
         _iniciarTimer();
       }
     });
   }
 
+  void _reiniciar() {
+    _timer?.cancel();
+    setState(() {
+      _segundos = 0;
+      _pausado  = false;
+      _tiemposVuelta.clear();
+      _iniciarTimer();
+    });
+  }
+
+  void _vuelta() {
+    if (!_pausado && _segundos > 0) {
+      setState(() => _tiemposVuelta.add(_segundos));
+    }
+  }
+
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -51,9 +68,17 @@ class _RelojState extends State<Reloj> {
   }
 
   Color get _colorTiempo {
+    if (_segundos > 120) return Colors.deepPurple;
     if (_segundos > 60) return Colors.red;
     if (_segundos > 30) return Colors.orange;
     return Colors.green;
+  }
+
+  String _formatoSegundos(int total) {
+    final h = total ~/ 3600;
+    final m = (total % 3600) ~/ 60;
+    final s = total % 60;
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -80,13 +105,14 @@ class _RelojState extends State<Reloj> {
               label: Text(_pausado ? 'Reanudar' : 'Pausar'),
             ),
             const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _vuelta,
+              icon: const Icon(Icons.flag),
+              label: const Text('Vuelta'),
+            ),
+            const SizedBox(width: 8),
             TextButton(
-              onPressed: () => setState(() {
-                _timer.cancel();
-                _segundos = 0;
-                _pausado  = false;
-                _iniciarTimer();
-              }),
+              onPressed: _reiniciar,
               child: const Text('Reiniciar'),
             ),
           ],
@@ -96,6 +122,14 @@ class _RelojState extends State<Reloj> {
           _pausado ? 'Pausado' : 'Corriendo',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
+        if (_tiemposVuelta.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Divider(indent: 32, endIndent: 32),
+          Text('Última vuelta: ${_formatoSegundos(_tiemposVuelta.last)}',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+          Text('Total vueltas: ${_tiemposVuelta.length}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        ],
       ],
     );
   }
