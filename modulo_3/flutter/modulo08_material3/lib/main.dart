@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'screens/pantalla_tema.dart';
 import 'screens/pantalla_appbar.dart';
+import 'screens/pantalla_navegacion.dart';
+import 'screens/pantalla_dialogs.dart';
 import 'widgets/catalogo_botones.dart';
 
 void main() => runApp(const AppMonitoreo());
@@ -14,7 +16,7 @@ class AppMonitoreo extends StatefulWidget {
 }
 
 class _AppMonitoreoState extends State<AppMonitoreo> {
-  int paso = 4;
+  int paso = 6;
 
   ThemeMode _themeMode = ThemeMode.system;
 
@@ -51,7 +53,11 @@ class _AppMonitoreoState extends State<AppMonitoreo> {
                 )
               : paso == 3
                   ? const PantallaAppBar()
-                  : const CatalogoBotones(),
+                  : paso == 4
+                      ? const CatalogoBotones()
+                      : paso == 5
+                          ? const PantallaNavegacion()
+                          : const PantallaDialogs(),
     );
   }
 }
