@@ -68,19 +68,32 @@ class Product {
     updatedAt: '',
   );
 
-  Product copyWith({bool? isActive, int? stock}) => Product(
-    id:           id,
-    name:         name,
-    description:  description,
-    price:        price,
-    priceWithTax: priceWithTax,
-    stock:        stock       ?? this.stock,
-    inStock:      (stock ?? this.stock) > 0,
-    isActive:     isActive    ?? this.isActive,
-    imageUrl:     imageUrl,
-    category:     category,
-    createdAt:    createdAt,
-    updatedAt:    updatedAt,
+  Product copyWith({
+    int?              id,
+    String?           name,
+    String?           description,
+    double?           price,
+    double?           priceWithTax,
+    int?              stock,
+    bool?             inStock,
+    bool?             isActive,
+    String?           imageUrl,
+    ProductCategory?  category,
+    String?           createdAt,
+    String?           updatedAt,
+  }) => Product(
+    id:           id           ?? this.id,
+    name:         name         ?? this.name,
+    description:  description  ?? this.description,
+    price:        price        ?? this.price,
+    priceWithTax: priceWithTax ?? this.priceWithTax,
+    stock:        stock        ?? this.stock,
+    inStock:      inStock      ?? (stock != null ? stock > 0 : this.inStock),
+    isActive:     isActive     ?? this.isActive,
+    imageUrl:     imageUrl     ?? this.imageUrl,
+    category:     category     ?? this.category,
+    createdAt:    createdAt    ?? this.createdAt,
+    updatedAt:    updatedAt    ?? this.updatedAt,
   );
 }
 
