@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/app_colors.dart';
-import '../providers/products_admin_provider.dart';
+import '../../domain/model/product.dart';
 
-Future<void> showRestockDialog(
-  BuildContext context,
-  WidgetRef    ref,
-  int          productId,
-  String       productName,
-) {
+Future<int?> showRestockDialog(BuildContext context, Product product) {
   final ctrl = TextEditingController();
-  return showDialog(
+  return showDialog<int>(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: AppColors.surface,
@@ -20,7 +14,7 @@ Future<void> showRestockDialog(
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('"$productName"',
+          Text('"${product.name}"',
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
           const SizedBox(height: 12),
           TextField(
@@ -44,8 +38,7 @@ Future<void> showRestockDialog(
           onPressed: () {
             final qty = int.tryParse(ctrl.text.trim());
             if (qty == null || qty <= 0) return;
-            Navigator.pop(ctx);
-            ref.read(productsAdminProvider.notifier).restock(productId, qty);
+            Navigator.pop(ctx, qty);
           },
           child: const Text('Reabastecer',
               style: TextStyle(

@@ -2,6 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/remote/api/product_remote_datasource.dart';
 import '../../domain/model/product.dart';
 
+enum ProductStockFilter { all, inStock, outOfStock, lowStock }
+
+extension ProductStockFilterLabel on ProductStockFilter {
+  String get label => switch (this) {
+    ProductStockFilter.all       => 'Todos',
+    ProductStockFilter.inStock   => 'En stock',
+    ProductStockFilter.outOfStock=> 'Agotados',
+    ProductStockFilter.lowStock  => 'Stock bajo',
+  };
+}
+
 class ProductsAdminState {
   final List<Product> products;
   final bool           isLoading;
@@ -12,6 +23,7 @@ class ProductsAdminState {
   final int            totalCount;
   final int            currentPage;
   final bool           hasMore;
+  final ProductStockFilter stockFilter;
 
   const ProductsAdminState({
     this.products    = const [],
@@ -23,13 +35,23 @@ class ProductsAdminState {
     this.totalCount  = 0,
     this.currentPage = 1,
     this.hasMore     = false,
+    this.stockFilter = ProductStockFilter.all,
   });
 
-  List<Product> get filtered => search.isEmpty
-      ? products
-      : products.where((p) =>
-          p.name.toLowerCase().contains(search.toLowerCase()) ||
-          (p.category?.name ?? '').toLowerCase().contains(search.toLowerCase())).toList();
+  List<Product> get filtered {
+    var result = search.isEmpty
+        ? products
+        : products.where((p) =>
+            p.name.toLowerCase().contains(search.toLowerCase()) ||
+            (p.category?.name ?? '').toLowerCase().contains(search.toLowerCase())).toList();
+
+    return switch (stockFilter) {
+      ProductStockFilter.all        => result,
+      ProductStockFilter.inStock    => result.where((p) => p.stock > 0).toList(),
+      ProductStockFilter.outOfStock => result.where((p) => p.stock == 0).toList(),
+      ProductStockFilter.lowStock   => result.where((p) => p.stock > 0 && p.stock < 5).toList(),
+    };
+  }
 
   ProductsAdminState copyWith({
     List<Product>?    products,
@@ -41,6 +63,7 @@ class ProductsAdminState {
     int?              totalCount,
     int?              currentPage,
     bool?             hasMore,
+    ProductStockFilter? stockFilter,
   }) => ProductsAdminState(
     products:      products      ?? this.products,
     isLoading:     isLoading     ?? this.isLoading,
@@ -51,6 +74,7 @@ class ProductsAdminState {
     totalCount:    totalCount    ?? this.totalCount,
     currentPage:   currentPage   ?? this.currentPage,
     hasMore:       hasMore       ?? this.hasMore,
+    stockFilter:   stockFilter   ?? this.stockFilter,
   );
 }
 
@@ -99,6 +123,7 @@ class ProductsAdminNotifier extends StateNotifier<ProductsAdminState> {
   }
 
   void setSearch(String q) => state = state.copyWith(search: q);
+  void setStockFilter(ProductStockFilter f) => state = state.copyWith(stockFilter: f);
 
   Future<void> loadMore() async {
     if (state.isLoadingMore || !state.hasMore) return;
@@ -187,7 +212,7 @@ class ProductsAdminNotifier extends StateNotifier<ProductsAdminState> {
     }
   }
 
-  Future<void> restock(int id, int quantity) async {
+  Future<int?> restock(int id, int quantity) async {
     state = state.copyWith(formState: const ProductFormSaving());
     try {
       final result = await _datasource.restock(id, quantity);
@@ -198,10 +223,12 @@ class ProductsAdminNotifier extends StateNotifier<ProductsAdminState> {
         ).toList(),
         formState: const ProductFormSuccess('Stock actualizado'),
       );
+      return newStock;
     } catch (e) {
       state = state.copyWith(
         formState: ProductFormError(e.toString().replaceAll('Exception: ', '')),
       );
+      return null;
     }
   }
 

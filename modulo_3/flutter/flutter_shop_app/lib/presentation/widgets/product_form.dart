@@ -2,71 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/app_colors.dart';
 import '../../core/utils/validators.dart';
-import '../../domain/model/product.dart';
 import '../../domain/model/category.dart';
-import '../../data/remote/api/category_remote_datasource.dart';
+import '../../domain/model/product.dart';
+import '../providers/image_upload_provider.dart';
 import '../providers/products_admin_provider.dart';
+import './product_image.dart';
 
 Future<void> showProductForm(
   BuildContext context,
   WidgetRef ref, {
   Product? initial,
+  required List<Category> categories,
 }) {
   ref.read(productsAdminProvider.notifier).resetFormState();
   return showModalBottomSheet(
-    context:           context,
+    context:            context,
     isScrollControlled: true,
-    backgroundColor:   AppColors.surface,
+    backgroundColor:    AppColors.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => UncontrolledProviderScope(
-      container: ProviderScope.containerOf(context),
-      child:     ProductFormSheet(initial: initial),
+    builder: (_) => ProviderScope(
+      parent: ProviderScope.containerOf(context),
+      child:  ProductFormSheet(initial: initial, categories: categories),
     ),
   );
 }
 
 class ProductFormSheet extends ConsumerStatefulWidget {
-  final Product? initial;
-  const ProductFormSheet({super.key, this.initial});
+  final Product?       initial;
+  final List<Category> categories;
+  const ProductFormSheet({super.key, this.initial, required this.categories});
 
   @override
   ConsumerState<ProductFormSheet> createState() => _ProductFormSheetState();
 }
 
 class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
-  final _formKey    = GlobalKey<FormState>();
-  final _nameCtrl   = TextEditingController();
-  final _descCtrl   = TextEditingController();
-  final _priceCtrl  = TextEditingController();
-  final _imageCtrl  = TextEditingController();
-  bool  _isActive   = true;
-  int?  _categoryId;
-  List<Category> _categories   = [];
-  bool            _catsLoaded  = false;
+  final _formKey   = GlobalKey<FormState>();
+  final _nameCtrl  = TextEditingController();
+  final _descCtrl  = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  bool    _isActive        = true;
+  int?    _categoryId;
+  String? _currentImageUrl;
 
   @override
   void initState() {
     super.initState();
     if (widget.initial != null) {
-      final p       = widget.initial!;
-      _nameCtrl.text = p.name;
-      _descCtrl.text = p.description;
-      _priceCtrl.text = p.price.toString();
-      _imageCtrl.text = p.imageUrl ?? '';
-      _isActive      = p.isActive;
-      _categoryId    = p.category?.id;
-    }
-    _loadCategories();
-  }
-
-  Future<void> _loadCategories() async {
-    try {
-      final cats = await ref.read(categoryDatasourceProvider).getCategories();
-      if (mounted) setState(() { _categories = cats; _catsLoaded = true; });
-    } catch (_) {
-      if (mounted) setState(() => _catsLoaded = true);
+      final p = widget.initial!;
+      _nameCtrl.text  = p.name;
+      _descCtrl.text  = p.description;
+      _priceCtrl.text = p.price.toStringAsFixed(2);
+      _isActive        = p.isActive;
+      _categoryId      = p.category?.id;
+      _currentImageUrl = p.imageUrl;
     }
   }
 
@@ -75,7 +66,6 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _priceCtrl.dispose();
-    _imageCtrl.dispose();
     super.dispose();
   }
 
@@ -86,12 +76,11 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
       'description': _descCtrl.text.trim(),
       'price':       double.parse(_priceCtrl.text.trim()),
       'is_active':   _isActive,
-      if (_imageCtrl.text.trim().isNotEmpty)
-        'image_url': _imageCtrl.text.trim(),
       if (_categoryId != null) 'category': _categoryId,
     };
     if (widget.initial != null) {
-      await ref.read(productsAdminProvider.notifier)
+      await ref
+          .read(productsAdminProvider.notifier)
           .updateProduct(widget.initial!.id, payload);
     } else {
       await ref.read(productsAdminProvider.notifier).createProduct(payload);
@@ -104,11 +93,21 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
     final isSaving = formSt is ProductFormSaving;
     final isEdit   = widget.initial != null;
 
+    ref.listen<ImageUploadState>(imageUploadProvider, (_, next) {
+      if (next is ImageUploadSuccess && next.imageUrl != null) {
+        setState(() => _currentImageUrl = next.imageUrl);
+      }
+    });
+    final isUploadingImage = ref.watch(imageUploadProvider) is ImageUploadLoading;
+
     if (formSt is ProductFormSuccess) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.pop(context);
       });
     }
+
+    final activeCategories =
+        widget.categories.where((c) => c.isActive).toList();
 
     return Padding(
       padding: EdgeInsets.only(
@@ -117,12 +116,13 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
-                width:  40, height: 4,
+                width:  40,
+                height: 4,
                 margin: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color:        AppColors.border,
@@ -130,14 +130,100 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
                 ),
               ),
             ),
-
             Text(
               isEdit ? 'Editar: ${widget.initial!.name}' : 'Nuevo producto',
               style: const TextStyle(
-                color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.bold,
+                color:      AppColors.textPrimary,
+                fontSize:   20,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            if (isEdit)
+              GestureDetector(
+                onTap: isUploadingImage
+                    ? null
+                    : () => ref
+                        .read(imageUploadProvider.notifier)
+                        .pickAndUploadProductImage(widget.initial!.id),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    height: 160,
+                    width:  double.infinity,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ProductImage(
+                          imageUrl:     _currentImageUrl,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        if (isUploadingImage)
+                          const ColoredBox(
+                            color: Colors.black45,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            color: Colors.black38,
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.photo_camera_outlined,
+                                  color: Colors.white,
+                                  size:  32,
+                                ),
+                                SizedBox(height: 6),
+                                Text(
+                                  'Cambiar imagen',
+                                  style: TextStyle(
+                                    color:      Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              Container(
+                height:      100,
+                decoration: BoxDecoration(
+                  color:        AppColors.surface2,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.image_outlined,
+                      color: AppColors.textFaint,
+                      size:  32,
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'La imagen se puede a\u00F1adir\ntras crear el producto.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color:    AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 16),
 
             if (formSt is ProductFormError) ...[
               Container(
@@ -161,11 +247,11 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextFormField(
-                    controller:  _nameCtrl,
-                    enabled:     !isSaving,
-                    decoration:  const InputDecoration(labelText: 'Nombre *'),
-                    style:       const TextStyle(color: AppColors.textPrimary),
-                    validator:   (v) => validateRequired(v, 'Nombre'),
+                    controller: _nameCtrl,
+                    enabled:    !isSaving,
+                    decoration: const InputDecoration(labelText: 'Nombre *'),
+                    style:      const TextStyle(color: AppColors.textPrimary),
+                    validator:  (v) => validateRequired(v, 'Nombre'),
                   ),
                   const SizedBox(height: 14),
 
@@ -174,63 +260,62 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
                     enabled:    !isSaving,
                     maxLines:   3,
                     decoration: const InputDecoration(
-                      labelText: 'Descripción',
+                      labelText: 'Descripci\u00F3n',
                       alignLabelWithHint: true,
                     ),
                     style: const TextStyle(color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 14),
 
-                  TextFormField(
-                    controller:    _priceCtrl,
-                    enabled:       !isSaving,
-                    keyboardType:  TextInputType.number,
-                    decoration:    const InputDecoration(labelText: 'Precio *'),
-                    style:         const TextStyle(color: AppColors.textPrimary),
-                    validator:     (v) => validatePositiveNumber(v, 'Precio'),
-                  ),
-                  const SizedBox(height: 14),
-
-                  TextFormField(
-                    controller:  _imageCtrl,
-                    enabled:     !isSaving,
-                    decoration:  const InputDecoration(
-                      labelText: 'URL de imagen',
-                      hintText:  'https://...',
-                    ),
-                    style: const TextStyle(color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 14),
-
-                  _catsLoaded
-                      ? DropdownButtonFormField<int?>(
-                          initialValue: _categoryId,
-                          decoration:  const InputDecoration(labelText: 'Categoría'),
-                          dropdownColor: AppColors.surface,
-                          style:       const TextStyle(color: AppColors.textPrimary),
-                          items: [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('Sin categoría',
-                                  style: TextStyle(color: AppColors.textSecondary)),
-                            ),
-                            ..._categories.map((c) => DropdownMenuItem<int?>(
-                              value: c.id,
-                              child: Text(c.name),
-                            )),
-                          ],
-                          onChanged: isSaving ? null : (v) => setState(() => _categoryId = v),
-                        )
-                      : const SizedBox(
-                          height: 56,
-                          child: Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller:   _priceCtrl,
+                          enabled:      !isSaving,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText:  'Precio *',
+                            prefixText: '\$ ',
                           ),
+                          style: const TextStyle(color: AppColors.textPrimary),
+                          validator: (v) => validatePositiveNumber(v, 'Precio'),
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  DropdownButtonFormField<int>(
+                    value:        _categoryId,
+                    decoration:   const InputDecoration(labelText: 'Categor\u00EDa *'),
+                    dropdownColor: AppColors.surface,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text(
+                          '\u2014 Seleccionar \u2014',
+                          style: TextStyle(color: AppColors.textFaint),
+                        ),
+                      ),
+                      ...activeCategories.map((c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.name),
+                      )),
+                    ],
+                    onChanged: isSaving
+                        ? null
+                        : (v) => setState(() => _categoryId = v),
+                    validator: (v) =>
+                        v == null ? 'Selecciona una categor\u00EDa' : null,
+                  ),
                   const SizedBox(height: 14),
 
                   Container(
-                    padding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color:        AppColors.surface2,
                       borderRadius: BorderRadius.circular(12),
@@ -241,26 +326,25 @@ class _ProductFormSheetState extends ConsumerState<ProductFormSheet> {
                         const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Producto activo',
-                                style: TextStyle(
-                                  color:      AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                )),
-                            const Text('Visible en el catálogo público',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary, fontSize: 12,
-                                )),
+                            Text(
+                              'Producto activo',
+                              style: TextStyle(
+                                color:      AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              'Visible en el cat\u00E1logo p\u00FAblico',
+                              style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
                         Switch(
                           value:          _isActive,
                           onChanged:      isSaving ? null : (v) => setState(() => _isActive = v),
                           activeThumbColor: AppColors.accent,
-                          trackColor:     WidgetStateProperty.resolveWith((s) =>
-                            s.contains(WidgetState.selected)
-                              ? AppColors.accent.withValues(alpha: 0.4)
-                              : AppColors.border,
-                          ),
                         ),
                       ],
                     ),
