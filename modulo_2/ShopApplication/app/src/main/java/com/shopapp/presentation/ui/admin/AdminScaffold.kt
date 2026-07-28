@@ -1,304 +1,237 @@
-// NavGraph.kt — dentro de @Composable NavGraph()
-// presentation/navigation/NavGraph.kt
-package com.shopapp.presentation.navigation
+// presentation/ui/admin/AdminScaffold.kt
+package com.shopapp.presentation.ui.admin
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavType
-import androidx.navigation.compose.*
-import androidx.navigation.navArgument
-import com.shopapp.presentation.components.LoadingScreen
-import com.shopapp.presentation.ui.admin.AdminScaffold
-import com.shopapp.presentation.ui.admin.dashboard.DashboardScreen
-import com.shopapp.presentation.ui.auth.LoginScreen
-import com.shopapp.presentation.ui.auth.RegisterScreen
-import com.shopapp.presentation.ui.uipublic.catalog.CatalogScreen
-import com.shopapp.presentation.ui.uipublic.home.HomeScreen
-import com.shopapp.presentation.ui.uipublic.product.ProductDetailScreen
-import com.shopapp.presentation.ui.uipublic.cart.CartBottomSheet
-import com.shopapp.presentation.ui.client.orders.OrdersScreen
-import com.shopapp.presentation.ui.client.orders.OrderDetailScreen
-import com.shopapp.presentation.ui.client.profile.ProfileScreen
-import com.shopapp.presentation.viewmodel.AuthViewModel
-import com.shopapp.presentation.viewmodel.CartViewModel
-import com.shopapp.theme.Surface
-import com.shopapp.theme.TextSecondary
+import androidx.compose.ui.unit.sp
+import com.shopapp.domain.model.LoggedUser
+import com.shopapp.theme.*
+import kotlinx.coroutines.launch
+
+data class AdminNavItem(
+    val label:  String,
+    val icon:   ImageVector,
+    val route:  String,
+)
+
+val ADMIN_NAV_ITEMS = listOf(
+    AdminNavItem("Dashboard",  Icons.Default.Dashboard,     "admin"),
+    AdminNavItem("Categorías", Icons.Default.Category,      "admin/categories"),
+    AdminNavItem("Productos",  Icons.Default.Inventory,     "admin/products"),
+    AdminNavItem("Pedidos",    Icons.Default.ShoppingBag,   "admin/orders"),
+    AdminNavItem("Usuarios",   Icons.Default.People,        "admin/users"),
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdminScaffold(
+    currentRoute:  String,
+    user:          LoggedUser?,
+    onNavClick:    (String) -> Unit,
+    onStoreClick:  () -> Unit,
+    onLogout:      () -> Unit,
+    title:         String,
+    content:       @Composable (PaddingValues) -> Unit,
+) {
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope       = rememberCoroutineScope()
+
+    ModalNavigationDrawer(
+        drawerState    = drawerState,
+        drawerContent  = {
+            AdminDrawerContent(
+                currentRoute  = currentRoute,
+                user          = user,
+                onNavClick    = { route ->
+                    scope.launch { drawerState.close() }
+                    onNavClick(route)
+                },
+                onStoreClick  = {
+                    scope.launch { drawerState.close() }
+                    onStoreClick()
+                },
+                onLogout      = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
+            )
+        },
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title   = {
+                        Text(
+                            text       = title,
+                            style      = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color      = TextPrimary,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menú", tint = TextPrimary)
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = onStoreClick) {
+                            Text(
+                                "← Tienda",
+                                color = Accent,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
+                )
+            },
+            containerColor = Background,
+            content        = content,
+        )
+    }
+}
 
 @Composable
-fun NavGraph(
-    authViewModel: AuthViewModel,
-    cartViewModel: CartViewModel = hiltViewModel(),
+private fun AdminDrawerContent(
+    currentRoute: String,
+    user:         LoggedUser?,
+    onNavClick:   (String) -> Unit,
+    onStoreClick: () -> Unit,
+    onLogout:     () -> Unit,
 ) {
-    val navController     = rememberNavController()
-    val isCheckingSession by authViewModel.isCheckingSession.collectAsState()
-    val isAuthenticated   by authViewModel.isAuthenticated.collectAsState()
-    val isStaff           by authViewModel.isStaff.collectAsState()
-    val cartCount         by cartViewModel.totalItems.collectAsState()
-
-    var showCart by remember { mutableStateOf(false) }
-    var confirmedOrderId by remember { mutableStateOf<Int?>(null) }
-
-    if (isCheckingSession) {
-        LoadingScreen("Iniciando ShopApp...")
-        return
-    }
-
-    val startDestination = when {
-        !isAuthenticated -> Screen.Login.route
-        isStaff          -> Screen.AdminDashboard.route
-        else             -> Screen.Home.route
-    }
-
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute      = navBackStackEntry?.destination?.route
-
-    val showBottomBar = currentRoute in listOf(
-        Screen.Home.route,
-        Screen.Catalog.route,
-        Screen.Orders.route,
-        Screen.Profile.route,
-    )
-
-    Scaffold(
-        containerColor = Surface,
-        bottomBar = {
-            if (showBottomBar) {
-                BottomNavBar(
-                    navController = navController,
-                    cartCount     = cartCount,
-                    onCartClick   = { showCart = true }, // 🔥 clave
-                )
-            }
-        },
-    ) { innerPadding ->
-
-        // 🔥 BottomSheet del carrito
-        if (showCart) {
-            CartBottomSheet(
-                cartViewModel   = cartViewModel,
-                isAuthenticated = isAuthenticated,
-                onDismiss       = { showCart = false },
-                onLoginRequired = {
-                    showCart = false
-                    navController.navigate(Screen.Login.route)
-                },
-                onOrderSuccess = { orderId ->
-                    confirmedOrderId = orderId
-                    showCart = false
-                },
+    ModalDrawerSheet(
+        drawerContainerColor = Surface,
+        modifier             = Modifier.width(280.dp),
+    ) {
+        // Header con logo
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Surface2)
+                .padding(24.dp),
+        ) {
+            Text(
+                text       = "ShopApp",
+                fontSize   = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color      = Accent,
+            )
+            Text(
+                text  = "Panel de administración",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
             )
         }
 
-        NavHost(
-            navController    = navController,
-            startDestination = startDestination,
-            modifier         = Modifier.padding(innerPadding),
-        ) {
+        HorizontalDivider(color = Border, thickness = 0.5.dp)
 
-            // ── LOGIN ───────────────────────────────
-            composable(Screen.Login.route) {
-                LoginScreen(
-                    onLoginSuccess = { staff ->
-                        val dest = if (staff) Screen.AdminDashboard.route else Screen.Home.route
-                        navController.navigate(dest) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
-                    },
-                    onNavigateToRegister = { navController.navigate(Screen.Register.route) },
-                    viewModel            = authViewModel,
-                )
-            }
-
-            // ── REGISTER ────────────────────────────
-            composable(Screen.Register.route) {
-                RegisterScreen(
-                    onRegisterSuccess = { staff ->
-                        val dest = if (staff) Screen.AdminDashboard.route else Screen.Home.route
-                        navController.navigate(dest) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
-                    },
-                    onNavigateToLogin = { navController.popBackStack() },
-                    viewModel         = authViewModel,
-                )
-            }
-
-            // ── HOME ───────────────────────────────
-            composable(Screen.Home.route) {
-                HomeScreen(
-                    onProductClick = { id -> navController.navigate("product/$id") },
-                    onCatalogClick = { navController.navigate(Screen.Catalog.route) },
-                )
-            }
-
-            // ── CATALOGO ───────────────────────────
-            composable(Screen.Catalog.route) {
-                CatalogScreen(
-                    onProductClick = { id -> navController.navigate("product/$id") },
-                )
-            }
-
-            // ── DETALLE PRODUCTO ───────────────────
-            composable(
-                route     = "product/{id}",
-                arguments = listOf(navArgument("id") { type = NavType.IntType }),
-            ) { backStackEntry ->
-                val id = backStackEntry.arguments?.getInt("id") ?: return@composable
-                ProductDetailScreen(
-                    productId     = id,
-                    onBack        = { navController.popBackStack() },
-                    cartViewModel = cartViewModel,
-                )
-            }
-
-            // ── PEDIDOS ────────────────────────────
-            composable(Screen.Orders.route) {
-                if (!isAuthenticated) {
-                    LaunchedEffect(Unit) {
-                        navController.navigate(Screen.Login.route) { popUpTo(Screen.Home.route) }
-                    }
-                } else {
-                    OrdersScreen(
-                        onOrderClick = { id -> navController.navigate("orders/$id") },
+        // Avatar del admin
+        if (user != null) {
+            Row(
+                modifier          = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier         = Modifier
+                        .size(40.dp)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(Accent, AccentLight)
+                            ),
+                            shape = CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text       = user.username.firstOrNull()?.uppercaseChar()?.toString() ?: "A",
+                        color      = AccentOnDark,
+                        fontWeight = FontWeight.Bold,
+                        fontSize   = 16.sp,
                     )
                 }
-            }
-
-            // ── DETALLE PEDIDO ─────────────────────
-            composable(
-                route     = Screen.OrderDetail().route,
-                arguments = listOf(navArgument("id") { type = NavType.IntType }),
-            ) { backStackEntry ->
-                val id = backStackEntry.arguments?.getInt("id") ?: return@composable
-                OrderDetailScreen(
-                    orderId = id,
-                    onBack  = { navController.popBackStack() },
-                )
-            }
-
-            // ── PERFIL ─────────────────────────────
-            composable(Screen.Profile.route) {
-                if (!isAuthenticated) {
-                    LaunchedEffect(Unit) {
-                        navController.navigate(Screen.Login.route) { popUpTo(Screen.Home.route) }
-                    }
-                } else {
-                    ProfileScreen(
-                        authViewModel = authViewModel,
-                        onLogout      = {
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        },
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text       = user.username,
+                        style      = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = TextPrimary,
                     )
-                }
-            }
-
-            // ── ADMIN ──────────────────────────────
-            composable(Screen.AdminDashboard.route) {
-                if (!isStaff) {
-                    LaunchedEffect(Unit) { navController.navigate(Screen.Home.route) { popUpTo(0) } }
-                    return@composable
-                }
-                AdminScaffold(
-                    currentRoute = Screen.AdminDashboard.route,
-                    user         = authViewModel.currentUser.collectAsState().value,
-                    title        = "Dashboard",
-                    onNavClick   = { route -> navController.navigate(route) {
-                        launchSingleTop = true
-                        restoreState    = true
-                    }},
-                    onStoreClick = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.AdminDashboard.route) { inclusive = false }
-                        }
-                    },
-                    onLogout     = {
-                        authViewModel.logout()
-                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
-                    },
-                ) { padding ->
-                    Box(modifier = Modifier.padding(padding)) {
-                        DashboardScreen(onNavigate = { route -> navController.navigate(route) })
-                    }
-                }
-            }
-            // Placeholders para M8-M12 — misma estructura con AdminScaffold
-            listOf(
-                "admin/categories" to "Categorías",
-                "admin/products"   to "Productos",
-                "admin/orders"     to "Pedidos",
-                "admin/users"      to "Usuarios",
-            ).forEach { (route, title) ->
-                composable(route) {
-                    if (!isStaff) {
-                        LaunchedEffect(Unit) { navController.navigate(Screen.Home.route) { popUpTo(0) } }
-                        return@composable
-                    }
-                    AdminScaffold(
-                        currentRoute = route,
-                        user         = authViewModel.currentUser.collectAsState().value,
-                        title        = title,
-                        onNavClick   = { r -> navController.navigate(r) { launchSingleTop = true } },
-                        onStoreClick = { navController.navigate(Screen.Home.route) },
-                        onLogout     = {
-                            authViewModel.logout()
-                            navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
-                        },
-                    ) { padding ->
-                        Box(
-                            modifier         = Modifier.fillMaxSize().padding(padding),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("$title — próximo módulo", color = TextSecondary)
-                        }
+                    Surface(
+                        color  = Accent.copy(alpha = 0.15f),
+                        shape  = MaterialTheme.shapes.extraSmall,
+                    ) {
+                        Text(
+                            text       = "Staff",
+                            color      = Accent,
+                            fontSize   = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier   = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
                     }
                 }
             }
         }
-    }
-}
 
-@Composable
-fun ScreenWithLogout(
-    title: String,
-    onLogout: () -> Unit,
-    content: @Composable () -> Unit = {},
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+        HorizontalDivider(color = Border, thickness = 0.5.dp)
+        Spacer(Modifier.height(8.dp))
 
-        content()
+        // Items de navegación
+        ADMIN_NAV_ITEMS.forEach { item ->
+            val isSelected = currentRoute == item.route || currentRoute.startsWith("${item.route}/")
+            NavigationDrawerItem(
+                icon     = {
+                    Icon(
+                        item.icon,
+                        contentDescription = item.label,
+                        tint = if (isSelected) Accent else TextSecondary,
+                    )
+                },
+                label    = {
+                    Text(
+                        text       = item.label,
+                        color      = if (isSelected) Accent else TextSecondary,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    )
+                },
+                selected = isSelected,
+                onClick  = { onNavClick(item.route) },
+                colors   = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor   = Accent.copy(alpha = 0.12f),
+                    unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                ),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.weight(1f))
+        HorizontalDivider(color = Border, thickness = 0.5.dp)
 
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
+        // Cerrar sesión
+        NavigationDrawerItem(
+            icon     = { Icon(Icons.Default.Logout, contentDescription = "Salir", tint = Error) },
+            label    = {
+                Text("Cerrar sesión", color = Error, fontWeight = FontWeight.SemiBold)
+            },
+            selected = false,
+            onClick  = onLogout,
+            colors   = NavigationDrawerItemDefaults.colors(
+                unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+            ),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(onClick = onLogout) {
-            Text("Cerrar sesión")
-        }
     }
 }
-
-

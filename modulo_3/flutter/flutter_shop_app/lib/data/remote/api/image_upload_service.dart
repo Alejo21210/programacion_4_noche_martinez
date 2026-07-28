@@ -1,0 +1,109 @@
+import 'dart:convert';
+import 'dart:io';
+
+import '../../../core/config/app_config.dart';
+import '../../local/secure_storage.dart';
+import 'package:http/http.dart' as http;
+
+class ImageUploadException implements Exception {
+  const ImageUploadException(this.message);
+  final String message;
+
+  @override
+  String toString() => 'ImageUploadException: $message';
+}
+
+class ImageUploadService {
+  ImageUploadService({SecureStorage? storage})
+      : _storage = storage ?? SecureStorage();
+
+  final SecureStorage _storage;
+
+  Future<String?> _readToken() async {
+    return _storage.getAccess();
+  }
+
+  Map<String, String> _authHeaders(String token) => {
+        'Authorization': 'Bearer $token',
+      };
+
+  Future<Map<String, dynamic>> _upload({
+    required Uri uri,
+    required String fieldName,
+    required File file,
+  }) async {
+    final token = await _readToken();
+    if (token == null) {
+      throw const ImageUploadException('No autenticado. Inicia sesi\u00F3n primero.');
+    }
+
+    final mimeType = _mimeTypeFromPath(file.path);
+
+    final request = http.MultipartRequest('PATCH', uri)
+      ..headers.addAll(_authHeaders(token))
+      ..files.add(
+        await http.MultipartFile.fromPath(
+          fieldName,
+          file.path,
+          contentType: mimeType,
+        ),
+      );
+
+    final streamedResponse = await request.send().timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        throw const ImageUploadException(
+          'La solicitud tard\u00F3 demasiado. Verifica tu conexi\u00F3n.',
+        );
+      },
+    );
+
+    final response = await http.Response.fromStream(streamedResponse);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return body;
+    }
+
+    final detail = _extractError(body);
+    throw ImageUploadException(detail);
+  }
+
+  String _extractError(Map<String, dynamic> body) {
+    if (body.containsKey('detail')) return body['detail'].toString();
+    if (body.containsKey('image')) {
+      final v = body['image'];
+      return v is List ? v.first.toString() : v.toString();
+    }
+    if (body.containsKey('avatar')) {
+      final v = body['avatar'];
+      return v is List ? v.first.toString() : v.toString();
+    }
+    return 'Error desconocido al subir la imagen.';
+  }
+
+  http.MediaType _mimeTypeFromPath(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    return switch (ext) {
+      'jpg' || 'jpeg' => http.MediaType('image', 'jpeg'),
+      'png' => http.MediaType('image', 'png'),
+      'webp' => http.MediaType('image', 'webp'),
+      _ => http.MediaType('image', 'jpeg'),
+    };
+  }
+
+  Future<String?> uploadProductImage({
+    required int productId,
+    required File file,
+  }) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/products/$productId/');
+    final body = await _upload(uri: uri, fieldName: 'image', file: file);
+    return body['image_url'] as String?;
+  }
+
+  Future<String?> uploadAvatar({required File file}) async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/users/profile/');
+    final body = await _upload(uri: uri, fieldName: 'avatar', file: file);
+    return body['avatar_url'] as String?;
+  }
+}

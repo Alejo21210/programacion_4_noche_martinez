@@ -2,6 +2,7 @@
 package com.shopapp.data.remote.api
 
 import com.shopapp.data.remote.dto.*
+import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -37,4 +38,8 @@ interface UserApi {
 
     @GET("users/stats/")
     suspend fun getStats(): Response<UserStatsDto>
+
+    @Multipart
+    @POST("users/upload-avatar/")
+    suspend fun uploadAvatar(@Part part: MultipartBody.Part): Response<UserDto>
 }
